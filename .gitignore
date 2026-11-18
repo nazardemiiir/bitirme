@@ -1,0 +1,18 @@
+# Python sanal ortamı ve önbellek
+.venv/
+venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# PyCharm ayarları
+.idea/
+
+# Veri ve eğitilmiş modeller (büyük dosyalar GitHub'a yüklenmez)
+*.csv
+*.zip
+models/
+
+# İşletim sistemi
+.DS_Store
+Thumbs.db
