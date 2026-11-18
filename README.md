@@ -20,10 +20,13 @@ Teslimat filosundaki araçların rotalarını yapay zekâ ile planlayan ve trafi
 
 Rota demosu (3 araç, 10 teslimat): OR-Tools, en yakın komşu (greedy) yöntemine göre toplam süreyi %25 kısalttı.
 
-## Kurulum
+## Kurulum ve çalıştırma
 
 ```
 pip install -r requirements.txt
+jupyter notebook 01_eda_ve_eta_modeli.ipynb   # modeli eğitir -> models/
+python prepare_roadnet.py                     # Manhattan yol ağını indirir -> data/
+python run_ai.py                              # http://127.0.0.1:8000 (harita), /docs (API)
 ```
 
 Veri seti: [Kaggle – New York City Taxi Trip Duration](https://www.kaggle.com/c/nyc-taxi-trip-duration) (`train.zip`). Veri dosyası boyutu nedeniyle repoya eklenmemiştir.
@@ -32,8 +35,20 @@ Veri seti: [Kaggle – New York City Taxi Trip Duration](https://www.kaggle.com/
 
 ```
 01_eda_ve_eta_modeli.ipynb   Veri analizi, model karşılaştırması, OR-Tools demosu
+ml/features.py               Model özellikleri (notebook ile aynı)
+ml/roadnet.py                OSM yol ağı, Dijkstra güzergâhı, kaza/kapalı yol desteği
+services/ai/main.py          FastAPI AI servisi: /predict-eta, /optimize-routes, /reroute
+services/ai/static/index.html  Leaflet canlı harita, simülasyon, kaza ekleme
+prepare_roadnet.py           Yol ağını bir kez indirir
+run_ai.py                    Servisi başlatır
 requirements.txt             Python paketleri
 ```
+
+## AI servisi
+
+- `POST /predict-eta` — iki nokta arası süre tahmini (XGBoost)
+- `POST /optimize-routes` — çok araçlı rota planı (OR-Tools) + greedy karşılaştırması, gerçek sokak güzergâhı
+- `POST /reroute` — kaza sonrası araçların o anki konumundan yeniden rotalama
 
 ## Teknolojiler
 

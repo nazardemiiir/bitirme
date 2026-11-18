@@ -6,3 +6,6 @@ xgboost
 ortools
 joblib
 jupyter
+fastapi
+uvicorn
+osmnx

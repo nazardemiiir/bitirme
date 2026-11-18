@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rota Optimizasyonu – Harita</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  :root {
+    --bg: #f5f6f8; --panel: #ffffff; --ink: #1d2433; --muted: #667085; --line: #e4e7ec;
+    --accent: #1f6feb; --good: #15803d; --bad: #b42318;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; font-family: "Segoe UI", system-ui, sans-serif; color: var(--ink); background: var(--bg); }
+  .app { display: grid; grid-template-columns: 340px 1fr; height: 100vh; }
+  aside { background: var(--panel); border-right: 1px solid var(--line); padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 18px; }
+  h1 { font-size: 17px; margin: 0; line-height: 1.3; }
+  .sub { color: var(--muted); font-size: 13px; margin-top: 4px; }
+  .group { display: flex; flex-direction: column; gap: 8px; }
+  label { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  input, select { font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+  .row { display: flex; gap: 8px; }
+  .row > * { flex: 1; }
+  button { font: inherit; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line); background: #fff; cursor: pointer; }
+  button:hover { background: #f2f4f7; }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600; }
+  button.primary:hover { background: #1a5fd0; }
+  button:disabled { opacity: .5; cursor: wait; }
+  .hint { font-size: 13px; color: var(--muted); background: #f9fafb; border: 1px dashed var(--line); border-radius: 8px; padding: 10px; line-height: 1.45; }
+  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .stat { border: 1px solid var(--line); border-radius: 8px; padding: 10px; }
+  .stat .v { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .stat .k { font-size: 12px; color: var(--muted); }
+  .stat.good .v { color: var(--good); }
+  .vehicles { display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+  .veh { display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; flex: none; }
+  .veh .t { margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 600; }
+  .err { color: var(--bad); font-size: 13px; }
+  .cmp { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+  .cmp th { text-align: right; font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; padding: 4px 6px; }
+  .cmp td { text-align: right; padding: 8px 6px; border-top: 1px solid var(--line); }
+  .cmp td:first-child, .cmp th:first-child { text-align: left; }
+  .cmp td:nth-child(2) { font-weight: 700; }
+  .cmp small { color: var(--muted); font-size: 11px; }
+  .pos { color: var(--good); font-weight: 600; }
+  .neg { color: var(--bad); font-weight: 600; }
+  #map { height: 100%; }
+  .pin { width: 26px; height: 26px; border-radius: 50%; background: #fff; border: 2px solid #344054; display: grid; place-items: center; font-size: 12px; font-weight: 700; color: #344054; box-shadow: 0 1px 3px rgba(0,0,0,.3); }
+  #incident.on { background: #fef3f2; border-color: var(--bad); color: var(--bad); font-weight: 600; }
+  .log { margin-top: 12px; border-left: 3px solid var(--bad); background: #fef3f2; border-radius: 6px; padding: 8px 10px; font-size: 13px; display: flex; flex-direction: column; gap: 6px; }
+  .crash { width: 26px; height: 26px; border-radius: 50%; background: var(--bad); color: #fff; display: grid; place-items: center; font-size: 14px; font-weight: 700; box-shadow: 0 1px 4px rgba(0,0,0,.4); }
+  .pin.done { background: #dcfce7; border-color: #15803d; color: #15803d; }
+  .car { width: 22px; height: 22px; border-radius: 6px; border: 2px solid #fff; color: #fff; display: grid; place-items: center; font-size: 11px; font-weight: 700; box-shadow: 0 1px 4px rgba(0,0,0,.45); }
+  .sim { border: 1px solid var(--line); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+  .clock { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .progress { height: 6px; background: #eef0f3; border-radius: 3px; overflow: hidden; }
+  .progress > div { height: 100%; background: var(--good); width: 0; transition: width .2s; }
+  .depot { width: 30px; height: 30px; border-radius: 6px; background: #111827; color: #fff; display: grid; place-items: center; font-size: 13px; font-weight: 700; box-shadow: 0 1px 3px rgba(0,0,0,.4); }
+  @media (max-width: 800px) { .app { grid-template-columns: 1fr; grid-template-rows: auto 60vh; } aside { border-right: 0; border-bottom: 1px solid var(--line); } }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside>
+    <div>
+      <h1>Yapay Zekâ Destekli Rota Optimizasyonu</h1>
+      <div class="sub">XGBoost süre tahmini + Google OR-Tools</div>
+    </div>
+
+    <div class="hint" id="hint">Haritaya tıkla: <b>ilk tıklama depoyu</b>, sonrakiler <b>teslimat noktalarını</b> ekler. Ya da hazır senaryoyu yükle.</div>
+
+    <div class="group">
+      <label for="vehicles">Araç sayısı</label>
+      <select id="vehicles">
+        <option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option>
+      </select>
+    </div>
+
+    <div class="group">
+      <label for="when">Kalkış zamanı</label>
+      <input id="when" type="datetime-local" value="2016-04-12T17:30">
+      <div class="row">
+        <button type="button" data-hour="03:30">Gece 03:30</button>
+        <button type="button" data-hour="08:30">Sabah 08:30</button>
+        <button type="button" data-hour="17:30">Akşam 17:30</button>
+      </div>
+    </div>
+
+    <div class="row">
+      <button type="button" id="sample">Örnek senaryo</button>
+      <button type="button" id="clear">Temizle</button>
+    </div>
+    <button type="button" id="incident">⚠ Kaza ekle</button>
+    <button type="button" class="primary" id="solve">Rotala</button>
+    <div class="err" id="err"></div>
+
+    <div id="result" hidden>
+      <table class="cmp">
+        <thead><tr><th></th><th>OR-Tools</th><th>Greedy</th><th>Fark</th></tr></thead>
+        <tbody>
+          <tr><td>Toplam süre</td><td id="total">–</td><td id="greedy">–</td><td id="improve">–</td></tr>
+          <tr><td>En uzun rota<br><small>son teslimatın bitişi</small></td><td id="longest">–</td><td id="greedyLong">–</td><td id="improveLong">–</td></tr>
+        </tbody>
+      </table>
+      <div class="sub" id="solveTime" style="margin:8px 0"></div>
+      <div class="vehicles" id="vehList"></div>
+
+      <div class="sim">
+        <label>Canlı simülasyon</label>
+        <div class="row" style="align-items:center">
+          <div><div class="clock" id="clock">--:--</div><div class="sub" id="delivered">0 / 0 teslimat</div></div>
+          <select id="speed" title="Simülasyon hızı">
+            <option value="30">×30</option><option value="60" selected>×60</option><option value="120">×120</option><option value="300">×300</option>
+          </select>
+        </div>
+        <div class="progress"><div id="bar"></div></div>
+        <button type="button" class="primary" id="play">▶ Simülasyonu başlat</button>
+        <div class="sub">Araçlar her bacağı XGBoost'un tahmin ettiği sürede tamamlar. ×60: 1 saniye = 1 dakika.</div>
+      </div>
+      <div class="log" id="log" hidden></div>
+    </div>
+  </aside>
+  <div id="map"></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const COLORS = ["#1f6feb", "#e8590c", "#2f9e44", "#c2255c", "#7048e8"];
+const BOUNDS = L.latLngBounds([40.49, -74.27], [40.92, -73.68]);
+
+const map = L.map("map", { maxBounds: BOUNDS.pad(0.1) }).setView([40.755, -73.98], 13);
+L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  maxZoom: 19, attribution: "&copy; OpenStreetMap katkıcıları"
+}).addTo(map);
+
+let depot = null, stops = [], markers = [], routeLayers = [];
+const $ = (id) => document.getElementById(id);
+
+function icon(html, cls) { return L.divIcon({ html: `<div class="${cls}">${html}</div>`, className: "", iconSize: [30, 30], iconAnchor: [15, 15] }); }
+
+function addPoint(latlng) {
+  if (!BOUNDS.contains(latlng)) { $("err").textContent = "Model New York için eğitildi; lütfen New York içinde bir nokta seç."; return; }
+  $("err").textContent = "";
+  if (!depot) {
+    depot = latlng;
+    markers.push(L.marker(latlng, { icon: icon("D", "depot"), title: "Depo" }).addTo(map));
+  } else {
+    stops.push(latlng);
+    markers.push(L.marker(latlng, { icon: icon(stops.length, "pin"), title: `Teslimat ${stops.length}` }).addTo(map));
+  }
+  clearRoutes();
+  updateHint();
+}
+
+function updateHint() {
+  $("hint").innerHTML = !depot
+    ? "Haritaya tıkla: <b>ilk tıklama depoyu</b>, sonrakiler <b>teslimat noktalarını</b> ekler. Ya da hazır senaryoyu yükle."
+    : `Depo seçildi, <b>${stops.length}</b> teslimat noktası var. Nokta eklemeye devam et ya da <b>Rotala</b>'ya bas.`;
+}
+
+function clearRoutes() { stopSim(true); routeLayers.forEach(l => map.removeLayer(l)); routeLayers = []; $("result").hidden = true; }
+
+// ---------- Canlı simülasyon ----------
+let sim = null;   // { vehicles, t, totalStops, done, start, raf, running, last }
+
+// startT > 0 ise (yeniden rotalama) simülasyon kaldığı yerden devam eder
+function buildSim(data, startT = 0, vehPos = null) {
+  const pts = [depot, ...stops];
+  const ptOf = (k, vid) => k === -1 ? vehPos[vid] : pts[k];
+  const prev = startT > 0 ? sim : null;
+  const vehicles = data.routes.filter(r => r.legs && r.legs.length).map((r, i) => {
+    let t0 = startT;
+    const legs = r.legs.map(lg => {
+      const latlngs = (lg.path || [ptOf(lg.from_stop, r.vehicle), ptOf(lg.to_stop, r.vehicle)]).map(p => L.latLng(p[0] ?? p.lat, p[1] ?? p.lng));
+      const cum = [0];
+      for (let k = 1; k < latlngs.length; k++) cum.push(cum[k - 1] + latlngs[k - 1].distanceTo(latlngs[k]));
+      const leg = { to: lg.to_stop, minutes: Math.max(lg.minutes, 0.1), latlngs, cum, start: t0, done: false };
+      t0 += leg.minutes;
+      return leg;
+    });
+    const color = COLORS[(r.vehicle - 1) % COLORS.length];
+    const carIcon = L.divIcon({ html: `<div class="car" style="background:${color}">${r.vehicle}</div>`, className: "", iconSize: [22, 22], iconAnchor: [11, 11] });
+    const marker = L.marker(vehPos ? vehPos[r.vehicle] : pts[0], { icon: carIcon, zIndexOffset: 1000 }).addTo(map);
+    return { vid: r.vehicle, legs, marker, end: t0 };
+  });
+  const totalStops = prev ? prev.totalStops : vehicles.reduce((s, v) => s + v.legs.filter(l => l.to !== 0).length, 0);
+  sim = { vehicles, t: startT, totalStops, done: prev ? prev.done : 0,
+          start: prev ? prev.start : new Date($("when").value), raf: null, running: false, last: 0,
+          end: Math.max(...vehicles.map(v => v.end), startT + 0.1) };
+  renderClock();
+}
+
+function positionOnLeg(leg, frac) {
+  const target = leg.cum[leg.cum.length - 1] * frac;
+  let k = 1;
+  while (k < leg.cum.length && leg.cum[k] < target) k++;
+  if (k >= leg.cum.length) return leg.latlngs[leg.latlngs.length - 1];
+  const a = leg.latlngs[k - 1], b = leg.latlngs[k];
+  const seg = leg.cum[k] - leg.cum[k - 1] || 1;
+  const f = (target - leg.cum[k - 1]) / seg;
+  return L.latLng(a.lat + (b.lat - a.lat) * f, a.lng + (b.lng - a.lng) * f);
+}
+
+function stepSim() {
+  for (const v of sim.vehicles) {
+    let pos = v.legs.length ? v.legs[v.legs.length - 1].latlngs.slice(-1)[0] : null;
+    for (const leg of v.legs) {
+      const end = leg.start + leg.minutes;
+      if (sim.t >= end) {
+        if (!leg.done) {
+          leg.done = true;
+          if (leg.to !== 0) { sim.done++; markers[leg.to].setIcon(icon(leg.to, "pin done")); }
+        }
+        continue;
+      }
+      pos = positionOnLeg(leg, Math.max(0, (sim.t - leg.start) / leg.minutes));
+      break;
+    }
+    if (pos) v.marker.setLatLng(pos);
+  }
+  renderClock();
+}
+
+function renderClock() {
+  if (!sim) return;
+  const now = new Date(sim.start.getTime() + sim.t * 60000);
+  $("clock").textContent = now.toTimeString().slice(0, 5);
+  $("delivered").textContent = `${sim.done} / ${sim.totalStops} teslimat`;
+  $("bar").style.width = Math.min(100, sim.t / sim.end * 100) + "%";
+}
+
+function loop(ts) {
+  if (!sim || !sim.running) return;
+  const dt = sim.last ? (ts - sim.last) / 1000 : 0;
+  sim.last = ts;
+  sim.t = Math.min(sim.end, sim.t + dt * Number($("speed").value) / 60);
+  stepSim();
+  if (sim.t >= sim.end) { sim.running = false; $("play").textContent = "↺ Baştan oynat"; return; }
+  sim.raf = requestAnimationFrame(loop);
+}
+
+function stopSim(remove) {
+  if (!sim) return;
+  sim.running = false;
+  cancelAnimationFrame(sim.raf);
+  if (remove) {
+    sim.vehicles.forEach(v => map.removeLayer(v.marker));
+    stops.forEach((_, i) => markers[i + 1] && markers[i + 1].setIcon(icon(i + 1, "pin")));
+    sim = null;
+    $("play").textContent = "▶ Simülasyonu başlat";
+  }
+}
+
+$("play").onclick = () => {
+  if (!sim) return;
+  if (sim.t >= sim.end) {           // baştan oynat
+    const data = lastData; stopSim(true); buildSim(data);
+  }
+  if (sim.running) { sim.running = false; $("play").textContent = "▶ Devam et"; return; }
+  sim.running = true; sim.last = 0; $("play").textContent = "⏸ Duraklat";
+  sim.raf = requestAnimationFrame(loop);
+};
+let lastData = null;
+function clearAll() {
+  markers.forEach(m => map.removeLayer(m)); markers = []; depot = null; stops = [];
+  incidentLayers.forEach(l => map.removeLayer(l)); incidentLayers = []; incidents = [];
+  $("log").innerHTML = ""; $("log").hidden = true;
+  clearRoutes(); updateHint(); $("err").textContent = "";
+}
+
+// ---------- Kaza ----------
+let incidents = [], incidentLayers = [], incidentMode = false;
+const INCIDENT_RADIUS = 300;
+
+$("incident").onclick = () => {
+  incidentMode = !incidentMode;
+  $("incident").classList.toggle("on", incidentMode);
+  $("incident").textContent = incidentMode ? "Haritada kaza noktasına tıkla… (iptal)" : "⚠ Kaza ekle";
+};
+
+function logMsg(html) {
+  $("log").hidden = false;
+  $("log").insertAdjacentHTML("afterbegin", `<div>${html}</div>`);
+}
+
+async function addIncident(latlng) {
+  incidentMode = false; $("incident").classList.remove("on"); $("incident").textContent = "⚠ Kaza ekle";
+  incidents.push({ lat: latlng.lat, lon: latlng.lng, radius_m: INCIDENT_RADIUS });
+  incidentLayers.push(L.circle(latlng, { radius: INCIDENT_RADIUS, color: "#b42318", fillColor: "#f04438", fillOpacity: .25, weight: 2 }).addTo(map));
+  incidentLayers.push(L.marker(latlng, { icon: L.divIcon({ html: '<div class="crash">!</div>', className: "", iconSize: [26, 26], iconAnchor: [13, 13] }), zIndexOffset: 900 }).addTo(map));
+  if (sim) await reroute();
+  else if (lastData) logMsg("Kaza eklendi. Yeni rota için <b>Rotala</b>'ya bas.");
+}
+
+async function reroute() {
+  const wasRunning = sim.running;
+  sim.running = false; cancelAnimationFrame(sim.raf);
+  const now = new Date(sim.start.getTime() + sim.t * 60000);
+  const pad = (n) => String(n).padStart(2, "0");
+  const iso = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}:00`;
+  const vehicles = sim.vehicles.map(v => ({
+    vehicle: v.vid,
+    position: { lat: v.marker.getLatLng().lat, lon: v.marker.getLatLng().lng },
+    remaining: v.legs.filter(l => !l.done && l.to !== 0).map(l => l.to),
+  }));
+  const t0 = performance.now();
+  const res = await fetch("/reroute", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
+    depot: { lat: depot.lat, lon: depot.lng }, stops: stops.map(s => ({ lat: s.lat, lon: s.lng })),
+    vehicles, current_time: iso, incidents, time_limit_s: 2 }) });
+  const data = await res.json();
+  if (!res.ok) { logMsg("Yeniden rotalama başarısız: " + (data.detail || res.status)); return; }
+  const secs = ((performance.now() - t0) / 1000).toFixed(1);
+  // Eski çizgileri kaldır, yenilerini çiz
+  routeLayers.forEach(l => map.removeLayer(l)); routeLayers = [];
+  data.routes.forEach(r => {
+    if (!r.path) return;
+    const color = COLORS[(r.vehicle - 1) % COLORS.length];
+    const line = L.polyline(r.path, { color, weight: 5, opacity: .85, dashArray: "8 6" }).addTo(map);
+    line.bindTooltip(`Araç ${r.vehicle} (yeni rota): ${r.duration_minutes} dk`);
+    routeLayers.push(line);
+  });
+  const vehPos = Object.fromEntries(sim.vehicles.map(v => [v.vid, v.marker.getLatLng()]));
+  sim.vehicles.forEach(v => map.removeLayer(v.marker));
+  buildSim(data, sim.t, vehPos);
+  const reassigned = data.routes.map(r => `Araç ${r.vehicle}: ${r.stop_order.filter(s => s > 0).join(" → ") || "depoya dönüş"}`).join("<br>");
+  logMsg(`<b>${$("clock").textContent} · Kaza bildirildi.</b> ${data.blocked_road_segments} yol parçası kapatıldı, ` +
+         `rotalar ${secs} sn'de yeniden hesaplandı.<br>${reassigned}`);
+  if (wasRunning) { sim.running = true; sim.last = 0; sim.raf = requestAnimationFrame(loop); $("play").textContent = "⏸ Duraklat"; }
+}
+
+map.on("click", (e) => incidentMode ? addIncident(e.latlng) : addPoint(e.latlng));
+$("clear").onclick = clearAll;
+$("sample").onclick = () => {
+  clearAll();
+  [[40.7505, -73.9934], [40.7580, -73.9855], [40.7614, -73.9776], [40.7484, -73.9857], [40.7411, -73.9897],
+   [40.7308, -73.9973], [40.7794, -73.9632], [40.7681, -73.9819], [40.7527, -73.9772], [40.7226, -73.9988], [40.7736, -73.9566]]
+    .forEach(([a, b]) => addPoint(L.latLng(a, b)));
+  map.fitBounds(L.latLngBounds([depot, ...stops]).pad(0.2));
+};
+document.querySelectorAll("[data-hour]").forEach(b => b.onclick = () => {
+  $("when").value = $("when").value.slice(0, 11) + b.dataset.hour;
+});
+
+$("solve").onclick = async () => {
+  if (!depot || stops.length === 0) { $("err").textContent = "Önce bir depo ve en az bir teslimat noktası ekle."; return; }
+  $("err").textContent = ""; $("solve").disabled = true; $("solve").textContent = "Hesaplanıyor…";
+  try {
+    const body = {
+      depot: { lat: depot.lat, lon: depot.lng },
+      stops: stops.map(s => ({ lat: s.lat, lon: s.lng })),
+      num_vehicles: Number($("vehicles").value),
+      departure_time: $("when").value + ":00",
+      time_limit_s: 3,
+      incidents,
+    };
+    const res = await fetch("/optimize-routes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail ? (typeof data.detail === "string" ? data.detail : "Geçersiz istek") : "Sunucu hatası");
+    draw(data);
+  } catch (e) {
+    $("err").textContent = "Rota hesaplanamadı: " + e.message;
+  } finally {
+    $("solve").disabled = false; $("solve").textContent = "Rotala";
+  }
+};
+
+function draw(data) {
+  clearRoutes();
+  const pts = [depot, ...stops];
+  $("vehList").innerHTML = "";
+  data.routes.forEach((r, i) => {
+    const color = COLORS[i % COLORS.length];
+    if (r.stop_order.length > 2) {
+      const latlngs = r.path ? r.path : r.stop_order.map(k => pts[k]);
+      const line = L.polyline(latlngs, { color, weight: 5, opacity: .85 }).addTo(map);
+      line.bindTooltip(`Araç ${r.vehicle}: ${r.duration_minutes} dk`);
+      routeLayers.push(line);
+    }
+    const stopsTxt = r.stop_order.slice(1, -1).join(" → ") || "boşta";
+    $("vehList").insertAdjacentHTML("beforeend",
+      `<div class="veh"><span class="dot" style="background:${color}"></span><span>Araç ${r.vehicle}: D → ${stopsTxt} → D</span><span class="t">${r.duration_minutes} dk</span></div>`);
+  });
+  const fmtPct = (p) => `<span class="${p >= 0 ? "pos" : "neg"}">${p >= 0 ? "−" : "+"}%${Math.abs(p)}</span>`;
+  $("total").textContent = data.total_minutes + " dk";
+  $("greedy").textContent = data.greedy_total_minutes + " dk";
+  $("improve").innerHTML = fmtPct(data.improvement_vs_greedy_percent);
+  $("longest").textContent = data.longest_route_minutes + " dk";
+  $("greedyLong").textContent = data.greedy_longest_minutes + " dk";
+  $("improveLong").innerHTML = fmtPct(data.longest_improvement_vs_greedy_percent);
+  $("solveTime").textContent = `OR-Tools çözüm süresi: ${data.solve_seconds} sn · ` +
+    (data.street_geometry ? "Rotalar gerçek sokak güzergâhıyla çizildi (OpenStreetMap + Dijkstra)." : "Yol ağı yüklenmediği için rotalar kuş uçuşu çizildi.");
+  $("result").hidden = false;
+  lastData = data;
+  buildSim(data);
+}
+</script>
+</body>
+</html>
